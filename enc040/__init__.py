@@ -1,8 +1,7 @@
 from RPi import GPIO
 from time import sleep, time
 import logging
-import warnings
-import threading
+from threading import Thread, Event
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -30,13 +29,11 @@ class Encoder:
         self.latest_switch_press = None
         self.switch_pressed_time = None
 
-        self.inc_event = threading.Event()
-        self.dec_event = threading.Event()
-        self.click_event_flag = threading.Event()
-        self.held_event_flag = threading.Event()
-
-        self._is_clicked = False
-        self._is_held = False
+        # Flags for events
+        self.longClicked = False
+        self.clicked = False
+        self.rotateUp = False
+        self.rotateDown = False
 
         if device is not None:
             if evdev is None:
@@ -74,36 +71,18 @@ class Encoder:
         if self.sw_triggered:
             press_duration = now - self.switch_pressed_time
             if press_duration > self.long_click_time:
-                self.longclick_event()
+                self.longClicked = True
             else:
-                self.click_event()
+                self.clicked = True
         self.sw_triggered = False
 
     def _rotateup(self):
         self.counter += self.step
-        self.rotateup_event(self.counter)
+        self.rotateUp = True
 
     def _rotatedown(self):
         self.counter -= self.step
-        self.rotatedown_event(self.counter)
-
-    def click_event(self):
-        logger.info("Button click event")
-        self._is_clicked = True
-        self.click_event_flag.set()
-
-    def longclick_event(self):
-        logger.info("Button long click event")
-        self._is_held = True
-        self.held_event_flag.set()
-
-    def rotateup_event(self, counter):
-        logger.info(f"Rotated up to {counter}")
-        self.inc_event.set()
-
-    def rotatedown_event(self, counter):
-        logger.info(f"Rotated down to {counter}")
-        self.dec_event.set()
+        self.rotateDown = True
 
     def watch(self):
         if self.device is not None:
@@ -140,27 +119,3 @@ class Encoder:
                     GPIO.cleanup()
                     break
         return
-
-    def waitForInc(self, timeout=None):
-        self.inc_event.wait(timeout)
-        self.inc_event.clear()
-
-    def waitForDec(self, timeout=None):
-        self.dec_event.wait(timeout)
-        self.dec_event.clear()
-
-    def waitForClick(self, timeout=None):
-        self.click_event_flag.wait(timeout)
-        self.click_event_flag.clear()
-
-    def isClicked(self):
-        if self._is_clicked:
-            self._is_clicked = False
-            return True
-        return False
-
-    def isHeld(self):
-        if self._is_held:
-            self._is_held = False
-            return True
-        return False
